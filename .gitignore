@@ -1,0 +1,50 @@
+# .gitignore for AskMyDocs
+# --------------------------
+
+# Environment / secrets — NEVER commit these
+.env
+.streamlit/secrets.toml
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+*.egg
+
+# FAISS index (large binary, rebuild from docs)
+data/faiss_index/
+
+# Log file
+app.log
+app.log.*
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter notebooks (not used, but just in case)
+.ipynb_checkpoints/
