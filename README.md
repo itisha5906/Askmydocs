@@ -75,7 +75,10 @@ graph TD
 ### 1. Prerequisites
 - Python 3.10 or higher
 - Git
-- (Optional) [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) for scanned PDFs
+- **(Optional for OCR)** [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) for scanned PDFs:
+  - **Windows**: Download installer from [UB-Mannheim](https://github.com/UB-Mannheim/tesseract/wiki) or run `winget install UB-Mannheim.TesseractOCR`
+  - **Linux (Ubuntu/Debian)**: `sudo apt-get update && sudo apt-get install -y tesseract-ocr`
+  - **macOS**: `brew install tesseract`
 
 ### 2. Clone the Repository
 ```bash
@@ -112,6 +115,7 @@ OPENAI_MODEL=gpt-4o-mini
 ```
 
 ### 5. Run the Application
+On Windows, you can simply double-click `run_app.bat` or run:
 ```bash
 streamlit run app.py
 ```
@@ -119,13 +123,37 @@ Open **`http://localhost:8501`** in your browser.
 
 ---
 
-## 🧪 Testing
+## 🧪 Testing & Evaluation
 
-Run all unit tests with pytest:
+### Automated Unit Tests
+Run all 64 unit tests with pytest:
 ```bash
 pytest tests/ -v
 ```
-All **58 unit tests** run with mocks and do not require external API tokens.
+All **64 unit tests** run with mocks and do not require external API tokens or GPU acceleration.
+
+### End-to-End Model Evaluation
+Run the automated benchmark across configured models on the 26 evaluation questions:
+```bash
+python eval/evaluate.py
+```
+Outputs `eval/results.csv` tracking retrieval Hit@k, keyword inclusion, refusal accuracy on unanswerable questions, and average latency across models.
+
+### OCR Accuracy Evaluation (CER)
+Benchmark Character Error Rate on scanned documents using Levenshtein distance:
+```bash
+python eval/ocr_check.py sample_docs/sample_text.pdf sample_docs/sample_ground_truth.txt
+```
+
+---
+
+## 📂 Sample Documents Guidelines
+
+Recommended PDF documents to test with and place in `sample_docs/`:
+1. **Academic / Research Papers**: arXiv research paper (e.g., Attention Is All You Need) for multi-column text extraction and complex citations.
+2. **Class Notes / Lecture Slides**: PDF slides or notes for testing section headings, bulleted concepts, and summaries.
+3. **Scanned / Image Document**: A scanned receipt, certificate, or handwritten/printed page to exercise the Tesseract OCR fallback engine.
+4. **Business Report / Technical Manual**: Multi-page report with repeated running headers and footers to test header deduplication and map-reduce summarization.
 
 ---
 
@@ -133,7 +161,7 @@ All **58 unit tests** run with mocks and do not require external API tokens.
 
 ```
 askmydocs/
-├── app.py                  # Streamlit Presentation Layer
+├── app.py                  # Streamlit Presentation Layer (Tabbed UI, Compare mode, Logs)
 ├── config.py               # Central configuration & secrets loader
 ├── requirements.txt        # Pinned dependencies
 ├── .env.example            # Environment variable template
@@ -141,6 +169,7 @@ askmydocs/
 ├── README.md               # Project documentation
 ├── QUICKSTART.md           # Fast setup guide
 ├── Dockerfile              # Container deployment recipe
+├── run_app.bat             # 1-click launcher for Windows
 ├── core/                   # Processing, Retrieval, and LLM services
 │   ├── loader.py           # Dual PDF extraction (PyPDF / PDFPlumber)
 │   ├── ocr.py              # OCR path for image pages (PyMuPDF + Tesseract)
@@ -148,13 +177,17 @@ askmydocs/
 │   ├── chunker.py          # Recursive text splitter with metadata
 │   ├── embeddings.py       # Local HuggingFace all-mpnet-base-v2
 │   ├── vectorstore.py      # FAISS build, persistence, and merge
-│   ├── retriever.py        # Top-K & MMR retriever with doc filtering
-│   ├── llm_factory.py      # Groq & OpenAI provider with fallback
-│   ├── rag_chain.py        # Grounded QA chain with source citations
-│   ├── summarizer.py       # Map-reduce document summarizer
-│   ├── services.py         # Unified facade consumed by UI
+│   ├── retriever.py        # Top-K & MMR retriever with scores & doc filtering
+│   ├── llm_factory.py      # Groq & OpenAI provider with retry & fallback
+│   ├── rag_chain.py        # Grounded QA chain with query condensation & citations
+│   ├── summarizer.py       # Map-reduce document summarizer (brief/detailed/bullets)
+│   ├── services.py         # Unified facade consumed by UI (includes compare mode)
 │   └── logger.py           # File + Streamlit log buffer
-├── tests/                  # Pytest test suites (58 tests)
+├── eval/                   # Benchmark and evaluation suite
+│   ├── questions.json      # 26 benchmark QA pairs with unanswerable traps
+│   ├── evaluate.py         # Latency, Hit@k, and keyword-inclusion evaluator
+│   └── ocr_check.py        # CER Levenshtein distance calculator
+├── tests/                  # Pytest test suites (64 unit tests)
 └── sample_docs/            # Sample documents for smoke tests
 ```
 

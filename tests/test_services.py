@@ -9,6 +9,7 @@ from langchain_core.documents import Document
 from core.services import (
     ask,
     clear_index,
+    compare,
     get_models,
     ingest_files,
     list_documents,
@@ -52,7 +53,31 @@ class TestServices:
                 top_k=5,
                 use_mmr=False,
                 doc_filter=None,
+                temperature=0.0,
+                max_tokens=1024,
             )
+
+    def test_compare_facade(self):
+        fake_docs = [Document(page_content="Fact A", metadata={"source": "doc.pdf", "page": 1})]
+        mock_llm_a = MagicMock()
+        mock_llm_a.invoke.return_value = MagicMock(content="Answer A")
+        mock_llm_b = MagicMock()
+        mock_llm_b.invoke.return_value = MagicMock(content="Answer B")
+
+        with patch("core.services.retrieve", return_value=fake_docs), \
+             patch("core.services.get_llm", side_effect=[mock_llm_a, mock_llm_b]):
+
+            result = compare(
+                question="What is this?",
+                model_a="llama-3.1-8b-instant",
+                model_b="llama-3.3-70b-versatile",
+            )
+
+            assert "model_a" in result
+            assert "model_b" in result
+            assert result["model_a"]["answer"] == "Answer A"
+            assert result["model_b"]["answer"] == "Answer B"
+            assert len(result["sources"]) == 1
 
     def test_summarize_facade_with_docstore(self):
         mock_store = MagicMock()

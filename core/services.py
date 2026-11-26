@@ -8,7 +8,8 @@ RAG answering, summarization, vector store operations, and provider management.
 Public API
 ----------
     ingest_files(files) -> dict[str, dict]
-    ask(question, history, provider, model, top_k, use_mmr, doc_filter) -> dict
+    ask(question, history, provider, model, top_k, use_mmr, doc_filter, temperature, max_tokens) -> dict
+    compare(question, model_a, model_b, provider_a, provider_b, top_k, use_mmr, doc_filter, temperature, max_tokens) -> dict
     summarize(doc_name_or_all, style, provider, model) -> dict
     list_documents() -> list[dict]
     clear_index() -> bool
@@ -19,19 +20,23 @@ Public API
 
 from __future__ import annotations
 
+import concurrent.futures
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
 from langchain_core.documents import Document
+from langchain_core.messages import HumanMessage, SystemMessage
 
 import config
 from core.chunker import chunk_documents
-from core.llm_factory import check_provider_status, get_groq_models
+from core.llm_factory import check_provider_status, get_groq_models, get_llm
 from core.loader import _compute_file_hash, load_pdf
 from core.logger import get_logger
 from core.preprocess import clean_text, detect_and_remove_headers_footers
-from core.rag_chain import answer_question
+from core.rag_chain import SYSTEM_PROMPT, _extract_sources, _format_context, answer_question
+from core.retriever import retrieve
 from core.summarizer import summarize_documents
 from core.vectorstore import (
     add_documents,
@@ -109,7 +114,22 @@ def ingest_files(files: list[Any]) -> dict[str, dict[str, Any]]:
             docs = load_pdf(target_path)
             total_pages = len(docs)
             total_chars = sum(len(d.page_content) for d in docs)
-            ocr_pages = sum(1 for d in docs if d.metadata.get("ocr"))
+            ocr_pages = sum(1 for d in docs if d.metadata.get("ocr") or d.metadata.get("is_ocr"))
+
+            if total_pages == 0:
+                results[filename] = {
+                    "pages": 0,
+                    "chars": 0,
+                    "ocr_pages": 0,
+                    "status": "Error: PDF contains no pages.",
+                }
+                continue
+
+            # Check if Tesseract is missing when OCR is needed
+            from core.ocr import check_tesseract
+            warning_msg = None
+            if ocr_pages > 0 and not check_tesseract():
+                warning_msg = "Tesseract OCR not installed. Scanned pages skipped."
 
             # 3. Clean text & remove headers/footers
             cleaned_docs: list[Document] = []
@@ -129,13 +149,16 @@ def ingest_files(files: list[Any]) -> dict[str, dict[str, Any]]:
             )
 
             # 5. Add chunks to vector store
-            add_documents(chunks)
+            if chunks:
+                add_documents(chunks)
 
             results[filename] = {
                 "pages": total_pages,
                 "chars": total_chars,
                 "ocr_pages": ocr_pages,
-                "status": "indexed",
+                "chunks": len(chunks),
+                "status": "indexed" if chunks else "Empty document (no text)",
+                "warning": warning_msg,
             }
             log.info(
                 "Successfully indexed '%s': %d pages, %d chars, %d chunks (%d OCR pages)",
@@ -166,13 +189,15 @@ def ask(
     top_k: int = 6,
     use_mmr: bool = False,
     doc_filter: str | None = None,
+    temperature: float = 0.0,
+    max_tokens: int = 1024,
 ) -> dict[str, Any]:
     """Execute a RAG query and return the answer, citations, and latency.
 
     Returns
     -------
     dict
-        {"answer": str, "sources": list[dict], "latency": float, "provider_used": str}
+        {"answer": str, "sources": list[dict], "latency": float, "provider_used": str, "fallback_used": bool}
     """
     return answer_question(
         query=question,
@@ -182,7 +207,95 @@ def ask(
         top_k=top_k,
         use_mmr=use_mmr,
         doc_filter=doc_filter,
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
+
+
+def compare(
+    question: str,
+    model_a: str,
+    model_b: str,
+    provider_a: str = "Groq",
+    provider_b: str = "Groq",
+    top_k: int = 6,
+    use_mmr: bool = False,
+    doc_filter: str | None = None,
+    temperature: float = 0.0,
+    max_tokens: int = 1024,
+) -> dict[str, Any]:
+    """Compare two models on the same question with single retrieval and parallel execution.
+
+    Retrieves context ONCE, calls both models in parallel using ThreadPoolExecutor,
+    times each separately, with NO fallback in this mode (errors are surfaced directly).
+
+    Returns
+    -------
+    dict
+        {
+            "model_a": {"model": str, "provider": str, "answer": str, "latency": float, "error": str | None},
+            "model_b": {"model": str, "provider": str, "answer": str, "latency": float, "error": str | None},
+            "sources": list[dict],
+        }
+    """
+    # 1. Retrieve context once
+    try:
+        retrieved_docs = retrieve(
+            query=question,
+            top_k=top_k,
+            use_mmr=use_mmr,
+            doc_filter=doc_filter,
+        )
+    except Exception as exc:
+        log.warning("Comparison retrieval failed: %s", exc)
+        retrieved_docs = []
+
+    context_text = _format_context(retrieved_docs)
+    user_prompt = f"Context:\n{context_text}\n\nUser Question:\n{question}"
+    messages = [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=user_prompt)]
+    sources = _extract_sources(retrieved_docs)
+
+    def _call_model(prov: str, mod: str) -> dict[str, Any]:
+        start = time.perf_counter()
+        try:
+            llm = get_llm(
+                provider=prov,
+                model=mod,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            resp = llm.invoke(messages)
+            content = resp.content if hasattr(resp, "content") else str(resp)
+            lat = round(time.perf_counter() - start, 2)
+            return {
+                "model": mod,
+                "provider": prov,
+                "answer": str(content).strip(),
+                "latency": lat,
+                "error": None,
+            }
+        except Exception as exc:  # noqa: BLE001
+            lat = round(time.perf_counter() - start, 2)
+            log.warning("Compare mode error for model %s/%s: %s", prov, mod, exc)
+            return {
+                "model": mod,
+                "provider": prov,
+                "answer": "",
+                "latency": lat,
+                "error": str(exc),
+            }
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        future_a = executor.submit(_call_model, provider_a, model_a)
+        future_b = executor.submit(_call_model, provider_b, model_b)
+        res_a = future_a.result()
+        res_b = future_b.result()
+
+    return {
+        "model_a": res_a,
+        "model_b": res_b,
+        "sources": sources,
+    }
 
 
 def summarize(

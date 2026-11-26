@@ -1,0 +1,5 @@
+AskMyDocs is an advanced Retrieval-Augmented Generation system.
+It extracts text from documents, performs semantic search using FAISS,
+and generates grounded answers using Groq Llama 3 models.
+Authors: Itisha Sharma and Kanishka Gupta. Guide: Dr. Shanu Sharma.
+Institution: ABESEC Ghaziabad. Session: 2026-27.

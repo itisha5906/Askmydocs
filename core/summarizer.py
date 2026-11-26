@@ -35,12 +35,20 @@ STYLE_PROMPTS = {
         "Provide a concise, cohesive 2-to-3 paragraph executive summary of the document. "
         "Highlight the overarching purpose, core findings, and overall conclusion."
     ),
+    "brief": (
+        "Provide a concise, cohesive 2-to-3 paragraph executive summary of the document. "
+        "Highlight the overarching purpose, core findings, and overall conclusion."
+    ),
     "detailed": (
         "Provide a structured, in-depth summary with clear sections (e.g., Background/Objective, "
         "Core Methodology/Architecture, Key Details & Results, and Conclusions). "
         "Preserve technical specifics and critical takeaways."
     ),
     "bullets": (
+        "Provide a comprehensive list of bullet points detailing the most critical takeaways, "
+        "specifications, findings, and actionable conclusions from the document."
+    ),
+    "bullet points": (
         "Provide a comprehensive list of bullet points detailing the most critical takeaways, "
         "specifications, findings, and actionable conclusions from the document."
     ),

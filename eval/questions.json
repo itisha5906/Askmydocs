@@ -1,0 +1,210 @@
+[
+  {
+    "id": 1,
+    "question": "Who are the authors of the AskMyDocs project?",
+    "document": "sample_text.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["Itisha Sharma", "Kanishka Gupta"],
+    "answerable": true
+  },
+  {
+    "id": 2,
+    "question": "Who is the faculty guide for the AskMyDocs project?",
+    "document": "sample_text.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["Dr. Shanu Sharma"],
+    "answerable": true
+  },
+  {
+    "id": 3,
+    "question": "Which institution and academic session is this project developed for?",
+    "document": "sample_text.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["ABESEC Ghaziabad", "2026-27"],
+    "answerable": true
+  },
+  {
+    "id": 4,
+    "question": "What is the primary objective of AskMyDocs as stated in the abstract?",
+    "document": "sample_text.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["Retrieval-Augmented Generation", "PDF", "natural language"],
+    "answerable": true
+  },
+  {
+    "id": 5,
+    "question": "What libraries are used for the OCR pipeline in AskMyDocs?",
+    "document": "sample_text.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["PyMuPDF", "Tesseract"],
+    "answerable": true
+  },
+  {
+    "id": 6,
+    "question": "What are the four key benefits of Retrieval-Augmented Generation listed in Chapter 1?",
+    "document": "sample_text.pdf",
+    "expected_page": 2,
+    "expected_keywords": ["Grounded", "Updatable", "Source attribution", "Domain adaptability"],
+    "answerable": true
+  },
+  {
+    "id": 7,
+    "question": "How does RAG differ from pure generative language models?",
+    "document": "sample_text.pdf",
+    "expected_page": 2,
+    "expected_keywords": ["parametric", "external knowledge", "retrieved"],
+    "answerable": true
+  },
+  {
+    "id": 8,
+    "question": "How many stages are there in the AskMyDocs RAG pipeline?",
+    "document": "sample_text.pdf",
+    "expected_page": 2,
+    "expected_keywords": ["nine", "stages"],
+    "answerable": true
+  },
+  {
+    "id": 9,
+    "question": "What are the five layers of the AskMyDocs system architecture?",
+    "document": "sample_text.pdf",
+    "expected_page": 3,
+    "expected_keywords": ["Presentation", "Processing", "Embedding and Retrieval", "Generation", "Output"],
+    "answerable": true
+  },
+  {
+    "id": 10,
+    "question": "What is the threshold character count below which a page is sent to OCR?",
+    "document": "sample_text.pdf",
+    "expected_page": 3,
+    "expected_keywords": ["50", "characters"],
+    "answerable": true
+  },
+  {
+    "id": 11,
+    "question": "At what DPI does PyMuPDF render scanned pages for Tesseract OCR?",
+    "document": "sample_text.pdf",
+    "expected_page": 3,
+    "expected_keywords": ["300", "DPI"],
+    "answerable": true
+  },
+  {
+    "id": 12,
+    "question": "What embedding model is used in Layer 3 and what is its dimensionality?",
+    "document": "sample_text.pdf",
+    "expected_page": 3,
+    "expected_keywords": ["all-mpnet-base-v2", "768"],
+    "answerable": true
+  },
+  {
+    "id": 13,
+    "question": "What vector database is used for semantic search in AskMyDocs?",
+    "document": "sample_text.pdf",
+    "expected_page": 3,
+    "expected_keywords": ["FAISS"],
+    "answerable": true
+  },
+  {
+    "id": 14,
+    "question": "What information is shown in the collapsible source expanders in Layer 5?",
+    "document": "sample_text.pdf",
+    "expected_page": 3,
+    "expected_keywords": ["filename", "page number", "snippet"],
+    "answerable": true
+  },
+  {
+    "id": 15,
+    "question": "Which cloud LLM models on Groq are supported by AskMyDocs?",
+    "document": "sample_text.pdf",
+    "expected_page": 4,
+    "expected_keywords": ["Llama 3.3 70B", "Llama 3.1 8B"],
+    "answerable": true
+  },
+  {
+    "id": 16,
+    "question": "Why does the application run smoothly on standard laptops without a GPU?",
+    "document": "sample_text.pdf",
+    "expected_page": 4,
+    "expected_keywords": ["cloud APIs", "CPU"],
+    "answerable": true
+  },
+  {
+    "id": 17,
+    "question": "Which web framework powers the AskMyDocs user interface?",
+    "document": "sample_text.pdf",
+    "expected_page": 4,
+    "expected_keywords": ["Streamlit"],
+    "answerable": true
+  },
+  {
+    "id": 18,
+    "question": "What are the four dimensions used to evaluate the AskMyDocs system?",
+    "document": "sample_text.pdf",
+    "expected_page": 5,
+    "expected_keywords": ["Retrieval Accuracy", "Summary Quality", "OCR Accuracy", "Response Latency"],
+    "answerable": true
+  },
+  {
+    "id": 19,
+    "question": "What was the Hit@6 retrieval accuracy achieved on the test set?",
+    "document": "sample_text.pdf",
+    "expected_page": 5,
+    "expected_keywords": ["0.91", "Hit@6"],
+    "answerable": true
+  },
+  {
+    "id": 20,
+    "question": "What is the average response latency reported for Llama 3.3 70B Versatile?",
+    "document": "sample_text.pdf",
+    "expected_page": 5,
+    "expected_keywords": ["2.3s"],
+    "answerable": true
+  },
+  {
+    "id": 21,
+    "question": "Name two future scope enhancements planned for AskMyDocs.",
+    "document": "sample_text.pdf",
+    "expected_page": 5,
+    "expected_keywords": ["DOCX", "Whisper"],
+    "answerable": true
+  },
+  {
+    "id": 22,
+    "question": "What is the tuition fee for computer science at ABESEC Ghaziabad?",
+    "document": "sample_text.pdf",
+    "expected_page": null,
+    "expected_keywords": [],
+    "answerable": false
+  },
+  {
+    "id": 23,
+    "question": "How many convolutional layers are in the ResNet-50 architecture?",
+    "document": "sample_text.pdf",
+    "expected_page": null,
+    "expected_keywords": [],
+    "answerable": false
+  },
+  {
+    "id": 24,
+    "question": "What is the population of Ghaziabad according to the 2021 census?",
+    "document": "sample_text.pdf",
+    "expected_page": null,
+    "expected_keywords": [],
+    "answerable": false
+  },
+  {
+    "id": 25,
+    "question": "Which quantum computing framework is used for quantum teleportation in AskMyDocs?",
+    "document": "sample_text.pdf",
+    "expected_page": null,
+    "expected_keywords": [],
+    "answerable": false
+  },
+  {
+    "id": 26,
+    "question": "What was the closing stock price of Apple Inc. on October 25, 2026?",
+    "document": "sample_text.pdf",
+    "expected_page": null,
+    "expected_keywords": [],
+    "answerable": false
+  }
+]

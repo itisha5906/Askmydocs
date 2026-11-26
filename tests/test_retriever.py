@@ -36,6 +36,18 @@ class TestRetriever:
 
     def test_retrieve_invokes_retriever(self):
         mock_store = MagicMock()
+        mock_doc = MagicMock()
+        mock_doc.metadata = {}
+        mock_store.similarity_search_with_score.return_value = [(mock_doc, 0.42)]
+
+        results = retrieve("test query", vectorstore=mock_store, top_k=3)
+        assert results == [mock_doc]
+        assert mock_doc.metadata["score"] == 0.42
+        mock_store.similarity_search_with_score.assert_called_once_with("test query", k=3, filter=None)
+
+    def test_retrieve_fallback_to_retriever_on_error(self):
+        mock_store = MagicMock()
+        mock_store.similarity_search_with_score.side_effect = RuntimeError("score error")
         mock_retriever = MagicMock()
         mock_retriever.invoke.return_value = ["doc1", "doc2"]
         mock_store.as_retriever.return_value = mock_retriever

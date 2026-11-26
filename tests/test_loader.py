@@ -107,3 +107,28 @@ class TestLoadPDF:
         fhash = docs[0].metadata["file_hash"]
         assert len(fhash) == 64
         assert all(c in "0123456789abcdef" for c in fhash)
+
+    def test_corrupt_pdf_raises_load_error(self, tmp_path):
+        """load_pdf raises LoadError for a corrupt PDF file."""
+        from core.loader import load_pdf, LoadError
+
+        corrupt_pdf = tmp_path / "corrupt.pdf"
+        corrupt_pdf.write_bytes(b"%PDF-1.4\ncorrupt garbage bytes that cannot be parsed\n%%EOF")
+
+        with pytest.raises(LoadError):
+            load_pdf(str(corrupt_pdf))
+
+    def test_password_protected_pdf_raises_load_error(self, tmp_path, monkeypatch):
+        """load_pdf raises LoadError with helpful message for encrypted PDFs."""
+        from unittest.mock import MagicMock
+        from core.loader import load_pdf, LoadError
+
+        pdf = tmp_path / "protected.pdf"
+        _make_text_pdf(["secret text"], pdf)
+
+        mock_reader = MagicMock()
+        mock_reader.is_encrypted = True
+        monkeypatch.setattr("pypdf.PdfReader", lambda *args, **kwargs: mock_reader)
+
+        with pytest.raises(LoadError, match="password-protected"):
+            load_pdf(str(pdf))

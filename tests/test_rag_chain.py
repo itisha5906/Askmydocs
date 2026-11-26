@@ -40,6 +40,7 @@ class TestRAGChain:
     def test_history_passed_to_invoke(self):
         fake_docs = [Document(page_content="Content", metadata={"source": "a.pdf", "page": 2})]
         with patch("core.rag_chain.retrieve", return_value=fake_docs), \
+             patch("core.rag_chain.condense_question", return_value="Follow up?"), \
              patch("core.rag_chain.invoke_with_fallback", return_value=("Answer", "Groq")) as mock_invoke:
 
             history = [
@@ -49,7 +50,19 @@ class TestRAGChain:
             answer_question(query="Follow up?", history=history)
 
             mock_invoke.assert_called_once()
-            messages, _ = mock_invoke.call_args[1].get("messages") or mock_invoke.call_args[0], None
-            # Verify system message, 2 history messages, and 1 user prompt are passed
             call_messages = mock_invoke.call_args[1].get("messages")
             assert len(call_messages) == 4
+
+    def test_condense_question_rewrites_with_history(self):
+        from core.rag_chain import condense_question
+        with patch("core.rag_chain.invoke_with_fallback", return_value=("What is machine learning?", "Groq")):
+            res = condense_question(
+                query="How does it work?",
+                history=[{"role": "user", "content": "Tell me about machine learning."}],
+            )
+            assert res == "What is machine learning?"
+
+    def test_condense_question_returns_query_when_history_empty(self):
+        from core.rag_chain import condense_question
+        res = condense_question("What is AI?", history=[])
+        assert res == "What is AI?"

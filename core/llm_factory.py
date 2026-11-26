@@ -15,6 +15,7 @@ Public API
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -25,6 +26,18 @@ from core.logger import get_logger
 log = get_logger(__name__)
 
 _cached_groq_models: list[str] | None = None
+
+
+class LLMResult(tuple):
+    """Tuple containing (content, provider) with extra attributes."""
+
+    def __new__(cls, content: str, provider: str, fallback_used: bool = False):
+        return super().__new__(cls, (content, provider))
+
+    def __init__(self, content: str, provider: str, fallback_used: bool = False):
+        self.content = content
+        self.provider = provider
+        self.fallback_used = fallback_used
 
 
 def get_groq_models(force_refresh: bool = False) -> list[str]:
@@ -149,49 +162,72 @@ def invoke_with_fallback(
     secondary_model: str | None = None,
     temperature: float = 0.0,
     max_tokens: int = 1024,
-) -> tuple[str, str]:
-    """Invoke the primary LLM, automatically falling back to secondary on failure.
+) -> LLMResult:
+    """Invoke the primary LLM with retry; falls back to secondary on persistent error.
+
+    Attempts primary LLM twice (retries once). If primary still fails, falls back to
+    the secondary provider and marks fallback_used=True.
 
     Returns
     -------
-    tuple[str, str]
-        (content_string, provider_actually_used)
+    LLMResult
+        Tuple (content_string, provider_actually_used) with .fallback_used attribute.
     """
+    last_err: Exception | None = None
+
     try:
-        llm = get_llm(
+        primary_llm = get_llm(
             provider=primary_provider,
             model=primary_model,
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        response = llm.invoke(messages)
-        content = response.content if hasattr(response, "content") else str(response)
-        return str(content), primary_provider
+    except Exception as exc:
+        primary_llm = None
+        last_err = exc
 
-    except Exception as exc:  # noqa: BLE001
-        log.warning(
-            "Primary LLM (%s/%s) failed: %s. Attempting fallback to %s...",
-            primary_provider,
-            primary_model,
-            exc,
-            secondary_provider,
+    if primary_llm is not None:
+        for attempt in range(2):
+            try:
+                response = primary_llm.invoke(messages)
+                content = response.content if hasattr(response, "content") else str(response)
+                return LLMResult(str(content), primary_provider, fallback_used=False)
+
+            except Exception as exc:  # noqa: BLE001
+                last_err = exc
+                if attempt == 0:
+                    log.warning(
+                        "Primary LLM (%s/%s) attempt 1 failed: %s. Retrying once...",
+                        primary_provider,
+                        primary_model,
+                        exc,
+                    )
+                    time.sleep(0.5)
+                    continue
+
+    log.warning(
+        "Primary LLM (%s/%s) failed after retry: %s. Attempting fallback to %s...",
+        primary_provider,
+        primary_model,
+        last_err,
+        secondary_provider,
+    )
+
+    try:
+        fallback_llm = get_llm(
+            provider=secondary_provider,
+            model=secondary_model,
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
-
-        try:
-            fallback_llm = get_llm(
-                provider=secondary_provider,
-                model=secondary_model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            response = fallback_llm.invoke(messages)
-            content = response.content if hasattr(response, "content") else str(response)
-            return str(content), f"{secondary_provider} (Fallback)"
-        except Exception as fallback_exc:
-            log.error("Fallback LLM (%s) also failed: %s", secondary_provider, fallback_exc)
-            raise RuntimeError(
-                f"Both primary ({primary_provider}) and fallback ({secondary_provider}) LLM calls failed: {fallback_exc}"
-            ) from fallback_exc
+        response = fallback_llm.invoke(messages)
+        content = response.content if hasattr(response, "content") else str(response)
+        return LLMResult(str(content), f"{secondary_provider} (Fallback)", fallback_used=True)
+    except Exception as fallback_exc:
+        log.error("Fallback LLM (%s) also failed: %s", secondary_provider, fallback_exc)
+        raise RuntimeError(
+            f"Both primary ({primary_provider}) and fallback ({secondary_provider}) LLM calls failed: {fallback_exc}"
+        ) from fallback_exc
 
 
 def check_provider_status() -> dict[str, dict]:

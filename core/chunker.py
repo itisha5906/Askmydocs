@@ -89,13 +89,17 @@ def chunk_documents(
                 continue
 
             # Build metadata: copy parent metadata, then add chunk-specific fields
+            source_name = doc.metadata.get("source", "unknown")
             metadata = {
                 **doc.metadata,
+                "source": source_name,
+                "filename": source_name,
                 "chunk_id": uuid.uuid4().hex,
                 "chunk_index": idx,
+                "chunk_number": idx + 1,
                 "total_chars": len(chunk_text),
                 # Normalise the OCR flag name to "is_ocr" for consistency
-                "is_ocr": doc.metadata.get("ocr", False),
+                "is_ocr": bool(doc.metadata.get("ocr", False) or doc.metadata.get("is_ocr", False)),
             }
 
             all_chunks.append(Document(page_content=chunk_text, metadata=metadata))

@@ -26,6 +26,15 @@ log = get_logger(__name__)
 
 NOT_FOUND_MESSAGE = "I could not find the answer in the provided documents."
 
+CONDENSE_PROMPT = """Given the chat history and a follow-up question, rephrase the follow-up question into a single, complete standalone question that can be understood without the chat history.
+Do NOT answer the question. If the question is already complete and standalone, return it unchanged.
+
+Chat History:
+{history}
+
+Follow-up Question: {question}
+Standalone Question:"""
+
 SYSTEM_PROMPT = """You are a strict, factual document retrieval assistant for the AskMyDocs system.
 Your task is to answer the user's question using ONLY the retrieved document excerpts provided below.
 
@@ -36,6 +45,40 @@ Strict Constraints:
 3. Do NOT extrapolate, speculate, or bring in outside knowledge.
 4. When stating facts, refer naturally to the source if relevant (e.g. 'According to [source]...').
 """
+
+
+def condense_question(
+    query: str,
+    history: list[dict[str, str]] | None = None,
+    provider: str = "Groq",
+    model: str | None = None,
+) -> str:
+    """Rewrite follow-up question into a standalone query using recent history."""
+    if not history:
+        return query.strip()
+
+    history_str = "\n".join(
+        f"{turn.get('role', 'user').capitalize()}: {turn.get('content', '')}"
+        for turn in history[-4:]
+    )
+    prompt = CONDENSE_PROMPT.format(history=history_str, question=query)
+
+    try:
+        rephrased, _ = invoke_with_fallback(
+            messages=[HumanMessage(content=prompt)],
+            primary_provider=provider,
+            primary_model=model,
+            temperature=0.0,
+            max_tokens=256,
+        )
+        cleaned = rephrased.strip().strip('"').strip("'")
+        if cleaned:
+            log.debug("Condensed query '%s' -> '%s'", query, cleaned)
+            return cleaned
+    except Exception as exc:
+        log.warning("Query condensation failed (%s); using original query.", exc)
+
+    return query.strip()
 
 
 def _format_context(docs: list[Document]) -> str:
@@ -77,13 +120,17 @@ def _extract_sources(docs: list[Document]) -> list[dict[str, Any]]:
     for doc in docs:
         content = doc.page_content.strip()
         snippet = content[:250] + ("..." if len(content) > 250 else "")
+        score = doc.metadata.get("score")
         sources.append(
             {
                 "source": doc.metadata.get("source", "Unknown"),
+                "filename": doc.metadata.get("filename", doc.metadata.get("source", "Unknown")),
                 "page": doc.metadata.get("page", 1),
                 "snippet": snippet,
                 "is_ocr": bool(doc.metadata.get("is_ocr", False)),
                 "chunk_id": doc.metadata.get("chunk_id", ""),
+                "chunk_number": doc.metadata.get("chunk_number", doc.metadata.get("chunk_index", 0) + 1),
+                "score": score,
             }
         )
     return sources
@@ -98,6 +145,8 @@ def answer_question(
     use_mmr: bool = False,
     doc_filter: str | None = None,
     vectorstore: Any = None,
+    temperature: float = 0.0,
+    max_tokens: int = 1024,
 ) -> dict[str, Any]:
     """Answer a user query with strict document grounding and citations.
 
@@ -119,6 +168,10 @@ def answer_question(
         Optional filename to restrict search to a single document.
     vectorstore:
         Optional pre-loaded FAISS vector store.
+    temperature:
+        Sampling temperature (default 0.0 for strict factual answers).
+    max_tokens:
+        Maximum output tokens.
 
     Returns
     -------
@@ -128,14 +181,24 @@ def answer_question(
             "sources": list[dict],
             "latency": float,
             "provider_used": str,
+            "fallback_used": bool,
+            "standalone_query": str,
         }
     """
     start_time = time.perf_counter()
 
-    # 1. Retrieve relevant chunks
+    # 1. Condense query if history is present
+    standalone_query = condense_question(
+        query=query,
+        history=history,
+        provider=provider,
+        model=model,
+    )
+
+    # 2. Retrieve relevant chunks using standalone query
     try:
         retrieved_docs = retrieve(
-            query=query,
+            query=standalone_query,
             vectorstore=vectorstore,
             top_k=top_k,
             use_mmr=use_mmr,
@@ -152,9 +215,11 @@ def answer_question(
             "sources": [],
             "latency": elapsed,
             "provider_used": "None (No docs retrieved)",
+            "fallback_used": False,
+            "standalone_query": standalone_query,
         }
 
-    # 2. Build messages with context and history
+    # 3. Build messages with context and history
     context_text = _format_context(retrieved_docs)
     user_prompt = f"Context:\n{context_text}\n\nUser Question:\n{query}"
 
@@ -162,13 +227,17 @@ def answer_question(
     messages.extend(_format_history(history, max_turns=6))
     messages.append(HumanMessage(content=user_prompt))
 
-    # 3. Call LLM with automatic fallback
-    answer_text, provider_used = invoke_with_fallback(
+    # 4. Call LLM with automatic fallback
+    llm_res = invoke_with_fallback(
         messages=messages,
         primary_provider=provider,
         primary_model=model,
-        temperature=0.0,
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
+    answer_text = llm_res[0] if isinstance(llm_res, tuple) else str(llm_res)
+    provider_used = llm_res[1] if isinstance(llm_res, tuple) and len(llm_res) > 1 else provider
+    fallback_used = getattr(llm_res, "fallback_used", False) or ("fallback" in str(provider_used).lower())
 
     elapsed = round(time.perf_counter() - start_time, 2)
     sources = _extract_sources(retrieved_docs)
@@ -178,4 +247,6 @@ def answer_question(
         "sources": sources,
         "latency": elapsed,
         "provider_used": provider_used,
+        "fallback_used": fallback_used,
+        "standalone_query": standalone_query,
     }
