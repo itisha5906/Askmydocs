@@ -166,44 +166,6 @@ with st.sidebar:
         if st.button("Refresh", use_container_width=True):
             st.rerun()
 
-    st.markdown("---")
-    st.markdown("### 💾 Export Conversation")
-    if st.session_state.messages:
-        txt_lines = []
-        md_lines = ["# AskMyDocs Conversation Export\n"]
-        for m in st.session_state.messages:
-            role = m["role"].capitalize()
-            txt_lines.append(f"{role}: {m['content']}\n")
-            md_lines.append(f"### {role}\n{m['content']}\n")
-            if m.get("sources"):
-                txt_lines.append("  Sources:\n")
-                md_lines.append("**Sources:**\n")
-                for s in m["sources"]:
-                    txt_lines.append(f"  - {s['source']} (Page {s['page']})\n")
-                    md_lines.append(f"- *{s['source']}* (Page {s['page']})\n")
-            txt_lines.append("\n" + "=" * 40 + "\n\n")
-            md_lines.append("\n---\n")
-
-        c_down1, c_down2 = st.columns(2)
-        with c_down1:
-            st.download_button(
-                "📥 .txt",
-                "".join(txt_lines),
-                file_name="chat_history.txt",
-                mime="text/plain",
-                use_container_width=True,
-            )
-        with c_down2:
-            st.download_button(
-                "📥 .md",
-                "".join(md_lines),
-                file_name="chat_history.md",
-                mime="text/markdown",
-                use_container_width=True,
-            )
-    else:
-        st.caption("No chat messages to export yet.")
-
     st.markdown(
         """
         <div class='author-badge'>
@@ -314,10 +276,14 @@ with tab_chat:
         st.info("⚖️ **Compare Mode Enabled**: Query is sent to two models in parallel with identical retrieved context.")
         col_m1, col_m2 = st.columns(2)
         groq_models = models_dict.get("Groq", [])
-        openai_models = models_dict.get("OpenAI-compatible", [config.OPENAI_MODEL])
-        all_choices = [(f"Groq: {m}", "Groq", m) for m in groq_models] + [
-            (f"OpenAI: {m}", "OpenAI-compatible", m) for m in openai_models
-        ]
+        status_info = services.provider_status()
+        openai_ready = status_info.get("OpenAI-compatible", {}).get("configured", False)
+
+        all_choices = [(f"Groq: {m}", "Groq", m) for m in groq_models]
+        if openai_ready:
+            openai_models = models_dict.get("OpenAI-compatible", [config.OPENAI_MODEL])
+            all_choices.extend([(f"OpenAI: {m}", "OpenAI-compatible", m) for m in openai_models])
+
         labels = [c[0] for c in all_choices] if all_choices else ["Default Model"]
 
         with col_m1:
@@ -328,7 +294,7 @@ with tab_chat:
                 compare_prov_a, compare_model_a = match_a[1], match_a[2]
 
         with col_m2:
-            idx_b = min(1, len(labels) - 1)
+            idx_b = min(1, len(labels) - 1) if len(labels) > 1 else 0
             sel_b = st.selectbox("Model B", labels, index=idx_b, key="cmp_m_b")
             match_b = next((c for c in all_choices if c[0] == sel_b), None)
             if match_b:

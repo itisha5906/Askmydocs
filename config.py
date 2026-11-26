@@ -70,6 +70,9 @@ FAISS_INDEX_META: Path = FAISS_INDEX_PATH / "indexed_files.json"
 # LLM fallback model list (used when Groq API call fails)
 # ---------------------------------------------------------------------------
 GROQ_FALLBACK_MODELS: list[str] = [
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "qwen/qwen3.8-27b",
     "llama-3.3-70b-versatile",
     "llama-3.1-8b-instant",
 ]

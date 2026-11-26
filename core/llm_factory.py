@@ -63,16 +63,39 @@ def get_groq_models(force_refresh: bool = False) -> list[str]:
         client = Groq(api_key=config.GROQ_API_KEY)
         response = client.models.list()
 
-        # Filter for text/chat models, excluding audio/whisper models
+        # Filter for text/chat models, excluding audio, guard, and specialized non-chat models
         chat_models: list[str] = []
+        excluded_terms = (
+            "whisper",
+            "guard",
+            "safeguard",
+            "canopylabs",
+            "orpheus",
+            "tts",
+            "audio",
+            "embed",
+        )
         for m in response.data:
             model_id = getattr(m, "id", "")
             active = getattr(m, "active", True)
-            if active and not ("whisper" in model_id.lower() or "guard" in model_id.lower()):
+            mid_lower = model_id.lower()
+            if active and not any(term in mid_lower for term in excluded_terms):
                 chat_models.append(model_id)
 
-        # Sort so llama models are easily found first
-        chat_models.sort(key=lambda name: (0 if "llama-3" in name else 1, name))
+        # Sort so premier general chat models are prioritized first
+        def _model_sort_key(name: str) -> tuple[int, str]:
+            n = name.lower()
+            if "120b" in n:
+                return (0, name)
+            if "20b" in n:
+                return (1, name)
+            if "qwen" in n:
+                return (2, name)
+            if "llama" in n:
+                return (3, name)
+            return (4, name)
+
+        chat_models.sort(key=_model_sort_key)
 
         if chat_models:
             _cached_groq_models = chat_models
@@ -231,9 +254,17 @@ def invoke_with_fallback(
 
 
 def check_provider_status() -> dict[str, dict]:
-    """Check whether providers are configured with API keys."""
-    groq_configured = bool(config.GROQ_API_KEY and config.GROQ_API_KEY.strip())
-    openai_configured = bool(config.OPENAI_API_KEY and config.OPENAI_API_KEY.strip())
+    """Check whether providers are configured with valid API keys."""
+    groq_configured = bool(
+        config.GROQ_API_KEY
+        and config.GROQ_API_KEY.strip()
+        and not config.GROQ_API_KEY.strip().startswith("your_")
+    )
+    openai_configured = bool(
+        config.OPENAI_API_KEY
+        and config.OPENAI_API_KEY.strip()
+        and not config.OPENAI_API_KEY.strip().startswith("your_")
+    )
 
     return {
         "Groq": {
